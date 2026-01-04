@@ -164,11 +164,21 @@ async function performFirstPassAnalysis(
   documents: any[]
 ): Promise<any> {
   try {
+    const truncate = (text: string, maxChars: number): string => {
+      if (!text || text.length <= maxChars) return text;
+      return text.substring(0, maxChars) + "... [truncated]";
+    };
+
     const documentsContext = documents
+      .slice(0, 5)
       .map((doc) => {
-        return `Document: ${doc.file_name}\nOCR Text: ${doc.ocr_text || "N/A"}\nAI Description: ${doc.ai_description || "N/A"}`;
+        const ocrText = truncate(doc.ocr_text || "N/A", 500);
+        const aiDesc = truncate(doc.ai_description || "N/A", 300);
+        return `Document: ${doc.file_name}\nOCR Text: ${ocrText}\nAI Description: ${aiDesc}`;
       })
       .join("\n\n");
+
+    const truncatedDescription = truncate(incident.description || "", 1000);
 
     const prompt = `You are an expert HSE (Health, Safety, and Environment) incident investigator. Perform a comprehensive first-pass analysis of this incident.
 
@@ -178,7 +188,7 @@ Severity: ${incident.severity}
 Date: ${incident.incident_date}
 Location: ${incident.location}
 Title: ${incident.title}
-Description: ${incident.description}
+Description: ${truncatedDescription}
 
 **SUPPORTING DOCUMENTS:**
 ${documentsContext || "No documents attached"}
@@ -222,7 +232,7 @@ Return ONLY valid JSON, no additional text.`;
         Authorization: `Bearer ${openaiKey}`,
       },
       body: JSON.stringify({
-        model: "gpt-4o",
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
@@ -235,6 +245,7 @@ Return ONLY valid JSON, no additional text.`;
           },
         ],
         temperature: 0.3,
+        max_tokens: 4000,
         response_format: { type: "json_object" },
       }),
     });

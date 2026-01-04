@@ -226,11 +226,31 @@ async function performSecondPassAnalysis(
   documents: any[]
 ): Promise<any> {
   const openaiKey = Deno.env.get("OPENAI_API_KEY");
-  
+
   if (!openaiKey) {
     console.error("OPENAI_API_KEY not configured");
     throw new Error("AI service not configured");
   }
+
+  const truncate = (text: string, maxChars: number): string => {
+    if (!text || text.length <= maxChars) return text;
+    return text.substring(0, maxChars) + "... [truncated]";
+  };
+
+  const truncateArray = (arr: any[], maxItems: number): any[] => {
+    if (!arr || arr.length <= maxItems) return arr || [];
+    return arr.slice(0, maxItems);
+  };
+
+  const truncatedDescription = truncate(incident?.description || "No description", 800);
+  const truncatedReviewerNotes = truncate(review?.reviewer_notes || "None", 600);
+
+  const hazards = truncateArray(firstPassAnalysis?.identified_hazards, 5);
+  const causes = truncateArray(firstPassAnalysis?.potential_causes, 5);
+  const actions = truncateArray(firstPassAnalysis?.recommended_actions, 5);
+  const approvedHazards = truncateArray(review?.approved_hazards, 5);
+  const approvedCauses = truncateArray(review?.approved_causes, 5);
+  const additionalActions = truncateArray(review?.additional_actions, 5);
 
   const prompt = `You are an expert HSE incident investigator performing a refined Root Cause Analysis (RCA). You are working with human expert feedback to produce a comprehensive, formal investigation.
 
@@ -240,21 +260,19 @@ Severity: ${incident?.severity || "Unknown"}
 Date: ${incident?.incident_date || "Unknown"}
 Location: ${incident?.location || "Unknown"}
 Title: ${incident?.title || "Unknown"}
-Description: ${incident?.description || "No description"}
+Description: ${truncatedDescription}
 
 **FIRST PASS AI ANALYSIS:**
-Identified Hazards: ${JSON.stringify(firstPassAnalysis?.identified_hazards || [])}
-Potential Causes: ${JSON.stringify(firstPassAnalysis?.potential_causes || [])}
-Recommended Actions: ${JSON.stringify(firstPassAnalysis?.recommended_actions || [])}
-Analysis Data: ${JSON.stringify(firstPassAnalysis?.analysis_data || {})}
+Identified Hazards: ${JSON.stringify(hazards)}
+Potential Causes: ${JSON.stringify(causes)}
+Recommended Actions: ${JSON.stringify(actions)}
 
 **HUMAN EXPERT REVIEW:**
 Review Status: ${review?.review_status || "Unknown"}
-Reviewer Notes: ${review?.reviewer_notes || "None"}
-Approved Hazards: ${JSON.stringify(review?.approved_hazards || [])}
-Approved Causes: ${JSON.stringify(review?.approved_causes || [])}
-Additional Actions: ${JSON.stringify(review?.additional_actions || [])}
-Corrections: ${JSON.stringify(review?.corrections || [])}
+Reviewer Notes: ${truncatedReviewerNotes}
+Approved Hazards: ${JSON.stringify(approvedHazards)}
+Approved Causes: ${JSON.stringify(approvedCauses)}
+Additional Actions: ${JSON.stringify(additionalActions)}
 
 **YOUR TASK:**
 Produce a comprehensive RCA following the "5 Whys" and "Fishbone" methodologies. Return a JSON object with:
@@ -302,7 +320,7 @@ Return ONLY valid JSON, no additional text.`;
       Authorization: `Bearer ${openaiKey}`,
     },
     body: JSON.stringify({
-      model: "gpt-4o",
+      model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
@@ -315,6 +333,7 @@ Return ONLY valid JSON, no additional text.`;
         },
       ],
       temperature: 0.2,
+      max_tokens: 4000,
       response_format: { type: "json_object" },
     }),
   });
