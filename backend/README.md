@@ -1,11 +1,14 @@
 # HSE Incident Investigation Backend
 
-FastAPI backend for HSE incident investigation and RCA reporting system.
+FastAPI backend for HSE incident investigation and RCA reporting system using PostgreSQL for database operations.
 
 ## Features
 
+- **PostgreSQL Database**: All database operations use direct PostgreSQL connection via asyncpg
+- **Supabase Storage**: File storage for documents (images, PDFs) via Supabase Storage API
+- **Document Processing**: PDF text extraction and image OCR with pytesseract
+- **AI Analysis**: OpenAI-powered incident analysis and RCA report generation
 - **PDF Export**: Generate professional PDF reports from RCA analysis
-- **PostgreSQL Database**: Direct connection to Supabase PostgreSQL database
 - **RESTful API**: Clean FastAPI architecture with proper error handling
 
 ## API Endpoints
@@ -13,6 +16,38 @@ FastAPI backend for HSE incident investigation and RCA reporting system.
 ### Health Check
 - `GET /` - Root endpoint
 - `GET /health` - Health check endpoint
+
+### Documents
+- `POST /api/process-document` - Process uploaded documents (PDF/Images)
+  ```json
+  {
+    "document_id": "uuid",
+    "file_type": "application/pdf" or "image/*"
+  }
+  ```
+
+### Analysis
+- `POST /api/ai-analysis-first-pass` - Perform initial AI analysis
+  ```json
+  {
+    "incident_id": "uuid"
+  }
+  ```
+
+- `POST /api/ai-analysis-second-pass-from-review` - Perform deep root cause analysis
+  ```json
+  {
+    "review_id": "uuid"
+  }
+  ```
+
+### Reports
+- `POST /api/generate-rca-report` - Generate RCA report
+  ```json
+  {
+    "incident_id": "uuid"
+  }
+  ```
 
 ### PDF Export
 - `POST /api/pdf/export-rca-report` - Export RCA report as PDF
@@ -28,6 +63,23 @@ FastAPI backend for HSE incident investigation and RCA reporting system.
 ### Prerequisites
 
 1. **Python 3.9+**
+2. **Tesseract OCR** - Required for image text extraction
+
+#### Install Tesseract
+
+**Ubuntu/Debian:**
+```bash
+sudo apt-get update
+sudo apt-get install tesseract-ocr
+```
+
+**macOS:**
+```bash
+brew install tesseract
+```
+
+**Windows:**
+Download from: https://github.com/UB-Mannheim/tesseract/wiki
 
 ### Installation
 
@@ -51,10 +103,16 @@ cp .env.example .env
 Edit `.env` with your credentials:
 ```env
 DATABASE_URL=postgresql://postgres.pghblaezuatajsrhkvqa:[YOUR-PASSWORD]@aws-0-us-east-1.pooler.supabase.com:6543/postgres
+SUPABASE_URL=https://pghblaezuatajsrhkvqa.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=[YOUR-SERVICE-ROLE-KEY]
+OPENAI_API_KEY=[YOUR-OPENAI-API-KEY]
 PORT=8000
 ```
 
-Replace `[YOUR-PASSWORD]` with your Supabase database password.
+Replace the placeholders:
+- `[YOUR-PASSWORD]` - Your Supabase database password
+- `[YOUR-SERVICE-ROLE-KEY]` - Your Supabase service role key (for storage access)
+- `[YOUR-OPENAI-API-KEY]` - Your OpenAI API key (for AI analysis)
 
 4. **Start the server:**
 ```bash
@@ -75,7 +133,7 @@ Once the server is running:
 
 Test syntax validity:
 ```bash
-python3 -m py_compile main.py routers/pdf_export.py services/pdf_generator.py utils/db_client.py
+python3 -m py_compile main.py routers/*.py services/*.py utils/*.py
 ```
 
 ### Project Structure
@@ -87,13 +145,19 @@ backend/
 ├── .env                        # Environment variables (create from .env.example)
 ├── routers/
 │   ├── __init__.py
+│   ├── documents.py           # Document processing endpoints
+│   ├── analysis.py            # AI analysis endpoints
+│   ├── reports.py             # RCA report generation endpoints
 │   └── pdf_export.py          # PDF export endpoints
 ├── services/
 │   ├── __init__.py
+│   ├── document_processor.py  # PDF/Image text extraction
+│   ├── ai_service.py          # OpenAI integration
 │   └── pdf_generator.py       # RCA report PDF generation
 └── utils/
     ├── __init__.py
-    └── db_client.py           # PostgreSQL connection
+    ├── db_client.py           # PostgreSQL connection
+    └── storage_client.py      # Supabase Storage connection
 
 ```
 
@@ -120,9 +184,18 @@ backend/
 
 Set these in your hosting platform:
 - `DATABASE_URL` - PostgreSQL connection string
+- `SUPABASE_URL` - Your Supabase project URL
+- `SUPABASE_SERVICE_ROLE_KEY` - Your Supabase service role key
+- `OPENAI_API_KEY` - Your OpenAI API key
 - `PORT` (usually provided by platform)
 
 ## Troubleshooting
+
+### Tesseract Not Found
+```
+Error: Tesseract not installed or not in PATH
+```
+**Solution**: Install Tesseract OCR for your operating system (see Prerequisites)
 
 ### Import Errors
 ```

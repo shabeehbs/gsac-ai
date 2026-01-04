@@ -2,8 +2,9 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
+import json
 
-from utils.supabase_client import get_supabase_client
+from utils.db_client import get_db_pool
 from services.ai_service import AIService
 
 router = APIRouter()
@@ -19,58 +20,68 @@ class GenerateReportResponse(BaseModel):
 @router.post("/generate-rca-report", response_model=GenerateReportResponse)
 async def generate_rca_report(request: GenerateReportRequest):
     try:
-        supabase = get_supabase_client()
+        pool = await get_db_pool()
 
-        incident = supabase.table("incidents").select("*").eq("id", request.incident_id).single().execute()
-
-        if not incident.data:
-            raise HTTPException(status_code=404, detail="Incident not found")
-
-        incident_data = incident.data
-
-        if incident_data.get('investigation_status') != 'COMPLETED':
-            raise HTTPException(
-                status_code=400,
-                detail="Incident investigation must be completed before generating RCA report"
+        async with pool.acquire() as conn:
+            incident_data = await conn.fetchrow(
+                'SELECT * FROM incidents WHERE id = $1',
+                request.incident_id
             )
 
-        analyses = supabase.table("incident_analyses").select("*").eq("incident_id", request.incident_id).execute()
-        witnesses = supabase.table("witnesses").select("*").eq("incident_id", request.incident_id).execute()
-        documents = supabase.table("incident_documents").select("*").eq("incident_id", request.incident_id).execute()
+            if not incident_data:
+                raise HTTPException(status_code=404, detail="Incident not found")
 
-        incident_data['analyses'] = analyses.data or []
-        incident_data['witnesses'] = witnesses.data or []
-        incident_data['documents'] = documents.data or []
+            incident_dict = dict(incident_data)
 
-        report_content = await AIService.generate_rca_report(incident_data)
+            if incident_dict.get('investigation_status') != 'COMPLETED':
+                raise HTTPException(
+                    status_code=400,
+                    detail="Incident investigation must be completed before generating RCA report"
+                )
 
-        report = supabase.table("rca_reports").insert({
-            "incident_id": request.incident_id,
-            "report_content": report_content,
-            "generated_at": datetime.utcnow().isoformat(),
-            "status": "DRAFT"
-        }).execute()
+            analyses = await conn.fetch(
+                'SELECT * FROM incident_analyses WHERE incident_id = $1',
+                request.incident_id
+            )
+            witnesses = await conn.fetch(
+                'SELECT * FROM witnesses WHERE incident_id = $1',
+                request.incident_id
+            )
+            documents = await conn.fetch(
+                'SELECT * FROM incident_documents WHERE incident_id = $1',
+                request.incident_id
+            )
 
-        if not report.data:
-            raise HTTPException(status_code=500, detail="Failed to save report")
+            incident_dict['analyses'] = [dict(a) for a in analyses]
+            incident_dict['witnesses'] = [dict(w) for w in witnesses]
+            incident_dict['documents'] = [dict(d) for d in documents]
 
-        report_id = report.data[0]['id']
+        report_content = await AIService.generate_rca_report(incident_dict)
 
-        supabase.table("audit_logs").insert({
-            "incident_id": request.incident_id,
-            "action_type": "RCA_REPORT_GENERATED",
-            "action_details": {
-                "report_id": report_id,
+        async with pool.acquire() as conn:
+            report_id = await conn.fetchval(
+                '''INSERT INTO rca_reports (incident_id, report_content, generated_at, status)
+                   VALUES ($1, $2, $3, $4) RETURNING id''',
+                request.incident_id, report_content, datetime.utcnow(), "DRAFT"
+            )
+
+            if not report_id:
+                raise HTTPException(status_code=500, detail="Failed to save report")
+
+            action_details = json.dumps({
+                "report_id": str(report_id),
                 "report_length": len(report_content)
-            },
-            "entity_type": "rca_report",
-            "entity_id": report_id,
-            "performed_by": None
-        }).execute()
+            })
+            await conn.execute(
+                '''INSERT INTO audit_logs (incident_id, action_type, action_details, entity_type, entity_id, performed_by)
+                   VALUES ($1, $2, $3, $4, $5, $6)''',
+                request.incident_id, "RCA_REPORT_GENERATED", action_details,
+                "rca_report", str(report_id), None
+            )
 
         return GenerateReportResponse(
             success=True,
-            report_id=report_id,
+            report_id=str(report_id),
             report_content=report_content
         )
 
