@@ -48,6 +48,7 @@ function SecondPassTrigger({ reviewId, onComplete }: { reviewId: string; onCompl
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session?.access_token}`,
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ reviewId }),
@@ -199,6 +200,7 @@ export function IncidentDetail({ incident, onBack, userId }: IncidentDetailProps
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${session?.access_token}`,
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -234,6 +236,7 @@ export function IncidentDetail({ incident, onBack, userId }: IncidentDetailProps
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session?.access_token}`,
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ incidentId: incident.id }),
