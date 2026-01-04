@@ -4,16 +4,16 @@ from dotenv import load_dotenv
 import os
 from contextlib import asynccontextmanager
 
-from routers import documents, analysis, reports, pdf_export
-from utils.db_client import get_db_pool, close_db_pool
+from routers import documents, analysis, reports, pdf_export, auth
+from utils.database import Database
 
 load_dotenv()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await get_db_pool()
+    await Database.connect()
     yield
-    await close_db_pool()
+    await Database.disconnect()
 
 app = FastAPI(
     title="HSE Incident Investigation API",
@@ -30,6 +30,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router, prefix="/api")
 app.include_router(documents.router, prefix="/api", tags=["documents"])
 app.include_router(analysis.router, prefix="/api", tags=["analysis"])
 app.include_router(reports.router, prefix="/api", tags=["reports"])
