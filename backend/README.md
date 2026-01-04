@@ -1,14 +1,11 @@
 # HSE Incident Investigation Backend
 
-FastAPI backend for HSE incident investigation and RCA reporting system using Python libraries for cost-effective document processing.
+FastAPI backend for HSE incident investigation and RCA reporting system.
 
 ## Features
 
-- **Cost-Effective Text Extraction**: Uses free Python libraries instead of expensive API calls
-  - PDF text extraction with PyPDF2 and pdfplumber
-  - Image OCR with Tesseract (pytesseract)
-- **AI-Powered Analysis**: Uses OpenAI only for intelligent analysis, not basic text extraction
-- **Supabase Integration**: Complete database and storage integration
+- **PDF Export**: Generate professional PDF reports from RCA analysis
+- **PostgreSQL Database**: Direct connection to Supabase PostgreSQL database
 - **RESTful API**: Clean FastAPI architecture with proper error handling
 
 ## API Endpoints
@@ -17,61 +14,20 @@ FastAPI backend for HSE incident investigation and RCA reporting system using Py
 - `GET /` - Root endpoint
 - `GET /health` - Health check endpoint
 
-### Document Processing
-- `POST /api/process-document` - Process uploaded documents (PDF/Images)
-  ```json
-  {
-    "document_id": "uuid",
-    "file_type": "application/pdf" or "image/*"
-  }
-  ```
-
-### Analysis
-- `POST /api/ai-analysis-first-pass` - Perform initial AI analysis
+### PDF Export
+- `POST /api/pdf/export-rca-report` - Export RCA report as PDF
   ```json
   {
     "incident_id": "uuid"
   }
   ```
-
-- `POST /api/ai-analysis-second-pass` - Perform deep root cause analysis
-  ```json
-  {
-    "incident_id": "uuid",
-    "human_feedback": "string"
-  }
-  ```
-
-### Reports
-- `POST /api/generate-rca-report` - Generate RCA report
-  ```json
-  {
-    "incident_id": "uuid"
-  }
-  ```
+  Returns a PDF file for download
 
 ## Setup
 
 ### Prerequisites
 
 1. **Python 3.9+**
-2. **Tesseract OCR** - Required for image text extraction
-
-#### Install Tesseract
-
-**Ubuntu/Debian:**
-```bash
-sudo apt-get update
-sudo apt-get install tesseract-ocr
-```
-
-**macOS:**
-```bash
-brew install tesseract
-```
-
-**Windows:**
-Download from: https://github.com/UB-Mannheim/tesseract/wiki
 
 ### Installation
 
@@ -94,11 +50,11 @@ cp .env.example .env
 
 Edit `.env` with your credentials:
 ```env
-SUPABASE_URL=your_supabase_url
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-OPENAI_API_KEY=your_openai_api_key
+DATABASE_URL=postgresql://postgres.pghblaezuatajsrhkvqa:[YOUR-PASSWORD]@aws-0-us-east-1.pooler.supabase.com:6543/postgres
 PORT=8000
 ```
+
+Replace `[YOUR-PASSWORD]` with your Supabase database password.
 
 4. **Start the server:**
 ```bash
@@ -119,7 +75,7 @@ Once the server is running:
 
 Test syntax validity:
 ```bash
-python3 -m py_compile main.py routers/*.py services/*.py utils/*.py
+python3 -m py_compile main.py routers/pdf_export.py services/pdf_generator.py utils/db_client.py
 ```
 
 ### Project Structure
@@ -131,33 +87,15 @@ backend/
 ├── .env                        # Environment variables (create from .env.example)
 ├── routers/
 │   ├── __init__.py
-│   ├── documents.py           # Document processing endpoints
-│   ├── analysis.py            # AI analysis endpoints
-│   └── reports.py             # RCA report generation
+│   └── pdf_export.py          # PDF export endpoints
 ├── services/
 │   ├── __init__.py
-│   ├── document_processor.py  # PDF/Image text extraction
-│   └── ai_service.py          # OpenAI integration
+│   └── pdf_generator.py       # RCA report PDF generation
 └── utils/
     ├── __init__.py
-    └── supabase_client.py     # Supabase connection
+    └── db_client.py           # PostgreSQL connection
 
 ```
-
-## Cost Savings
-
-This architecture saves significant API costs:
-
-| Task | Old Approach | New Approach | Savings |
-|------|--------------|--------------|---------|
-| PDF Text Extraction | AI API calls | PyPDF2/pdfplumber | ~$0.01-0.05 per page |
-| Image OCR | AI API calls | Tesseract | ~$0.05-0.10 per image |
-| Image Analysis | AI API for everything | AI only for scene description | ~50-70% reduction |
-
-**Example**: Processing 100 documents with 5 pages each
-- Old cost: ~$25-50
-- New cost: ~$2-5 (only for intelligent analysis)
-- **Savings: ~80-90%**
 
 ## Production Deployment
 
@@ -171,9 +109,8 @@ This architecture saves significant API costs:
 
 ### Important Notes
 
-1. **Install Tesseract OCR** on your production server
-2. **Set all environment variables** in your hosting platform
-3. **Use production ASGI server**:
+1. **Set all environment variables** in your hosting platform
+2. **Use production ASGI server**:
    ```bash
    pip install gunicorn
    gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
@@ -182,18 +119,10 @@ This architecture saves significant API costs:
 ### Environment Variables (Production)
 
 Set these in your hosting platform:
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `OPENAI_API_KEY`
+- `DATABASE_URL` - PostgreSQL connection string
 - `PORT` (usually provided by platform)
 
 ## Troubleshooting
-
-### Tesseract Not Found
-```
-Error: Tesseract not installed or not in PATH
-```
-**Solution**: Install Tesseract OCR for your operating system (see Prerequisites)
 
 ### Import Errors
 ```
@@ -205,11 +134,11 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Supabase Connection Error
+### Database Connection Error
 ```
-ValueError: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set
+ValueError: DATABASE_URL must be set
 ```
-**Solution**: Create `.env` file from `.env.example` and add your credentials
+**Solution**: Create `.env` file from `.env.example` and add your PostgreSQL connection string
 
 ## License
 

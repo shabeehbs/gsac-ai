@@ -2,15 +2,24 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import os
+from contextlib import asynccontextmanager
 
-from routers import documents, analysis, reports, pdf_export
+from routers import pdf_export
+from utils.db_client import get_db_pool, close_db_pool
 
 load_dotenv()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await get_db_pool()
+    yield
+    await close_db_pool()
 
 app = FastAPI(
     title="HSE Incident Investigation API",
     description="Backend API for HSE incident investigation and RCA reporting",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 app.add_middleware(
@@ -21,9 +30,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(documents.router, prefix="/api", tags=["documents"])
-app.include_router(analysis.router, prefix="/api", tags=["analysis"])
-app.include_router(reports.router, prefix="/api", tags=["reports"])
 app.include_router(pdf_export.router, prefix="/api", tags=["pdf"])
 
 @app.get("/")
