@@ -240,10 +240,18 @@ export function IncidentDetail({ incident, onBack, userId }: IncidentDetailProps
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Analysis failed');
+        const errorText = await response.text();
+        console.error('Analysis API error response:', errorText);
+        try {
+          const errorData = JSON.parse(errorText);
+          throw new Error(errorData.error || `Analysis failed (${response.status})`);
+        } catch {
+          throw new Error(`Analysis failed (${response.status}): ${errorText.substring(0, 200)}`);
+        }
       }
 
+      const result = await response.json();
+      console.log('Analysis completed successfully:', result);
       await loadIncidentData();
     } catch (err: any) {
       console.error('Error running analysis:', err);
