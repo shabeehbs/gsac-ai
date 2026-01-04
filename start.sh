@@ -2,28 +2,57 @@
 
 set -e
 
-echo "🚀 Starting RCA Platform Local Setup"
+echo "🚀 Starting RCA Platform (Fully Dockerized)"
 echo ""
 
 if ! command -v docker &> /dev/null; then
     echo "❌ Docker is not installed. Please install Docker first."
+    echo "   Visit: https://docs.docker.com/get-docker/"
     exit 1
 fi
 
 if ! command -v docker-compose &> /dev/null; then
     echo "❌ Docker Compose is not installed. Please install Docker Compose first."
+    echo "   Visit: https://docs.docker.com/compose/install/"
     exit 1
 fi
 
 echo "✅ Docker is installed"
-
 echo ""
-echo "📦 Starting Docker services (PostgreSQL + MinIO)..."
-docker-compose up -d
+
+if [ ! -f .env ]; then
+    echo "⚠️  No .env file found!"
+    echo ""
+    echo "Creating .env from template..."
+    cp .env.example .env
+    echo ""
+    echo "📝 IMPORTANT: Edit the .env file and add your OpenAI API key:"
+    echo "   OPENAI_API_KEY=sk-your-actual-api-key-here"
+    echo ""
+    echo "Then run this script again."
+    exit 1
+fi
+
+if grep -q "sk-your-openai-api-key-here" .env; then
+    echo "⚠️  Warning: You haven't set your OpenAI API key in .env"
+    echo "   The application will start but AI features won't work."
+    echo ""
+    read -p "Continue anyway? (y/n) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        exit 1
+    fi
+fi
+
+echo "📦 Building and starting all Docker containers..."
+echo "   This may take a few minutes on first run..."
+echo ""
+
+docker-compose up --build -d
 
 echo ""
 echo "⏳ Waiting for services to be ready..."
-sleep 5
+sleep 10
 
 if ! docker-compose ps | grep -q "rca_postgres.*Up"; then
     echo "❌ PostgreSQL failed to start"
@@ -37,33 +66,38 @@ if ! docker-compose ps | grep -q "rca_minio.*Up"; then
     exit 1
 fi
 
-echo "✅ PostgreSQL is running on port 5432"
-echo "✅ MinIO is running on port 9000"
+if ! docker-compose ps | grep -q "rca_backend.*Up"; then
+    echo "❌ Backend failed to start"
+    docker-compose logs backend
+    exit 1
+fi
+
+if ! docker-compose ps | grep -q "rca_frontend.*Up"; then
+    echo "❌ Frontend failed to start"
+    docker-compose logs frontend
+    exit 1
+fi
 
 echo ""
-echo "📝 Setup Instructions:"
+echo "✅ All services are running!"
 echo ""
-echo "1. Backend Setup:"
-echo "   cd backend"
-echo "   cp .env.example .env"
-echo "   # Edit .env and add your OPENAI_API_KEY"
-echo "   python3 -m venv venv"
-echo "   source venv/bin/activate"
-echo "   pip install -r requirements.txt"
-echo "   python3 main.py"
+echo "🌐 Access Points:"
+echo "   📱 Application:      http://localhost"
+echo "   🔧 Backend API:      http://localhost:8000"
+echo "   📚 API Docs:         http://localhost:8000/docs"
+echo "   🗄️  MinIO Console:    http://localhost:9001"
+echo "   🐘 PostgreSQL:       localhost:5432"
 echo ""
-echo "2. Frontend Setup (in a new terminal):"
-echo "   npm install"
-echo "   npm run dev"
-echo ""
-echo "3. Access the application:"
-echo "   Frontend: http://localhost:5173"
-echo "   Backend API: http://localhost:8000"
-echo "   API Docs: http://localhost:8000/docs"
-echo "   MinIO Console: http://localhost:9001"
-echo ""
-echo "4. Default login:"
-echo "   Email: admin@example.com"
+echo "🔐 Default Login:"
+echo "   Email:    admin@example.com"
 echo "   Password: admin123"
 echo ""
-echo "📖 For detailed instructions, see LOCAL_SETUP.md"
+echo "📊 Service Status:"
+docker-compose ps
+echo ""
+echo "📖 Commands:"
+echo "   View logs:     docker-compose logs -f"
+echo "   Stop all:      ./stop.sh"
+echo "   Restart:       docker-compose restart"
+echo ""
+echo "✨ Ready to use!"

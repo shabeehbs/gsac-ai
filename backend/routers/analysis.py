@@ -1,10 +1,11 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Dict, Any, Optional
 from datetime import datetime
 import json
 
-from utils.db_client import get_db_pool
+from utils.database import Database
+from utils.auth import get_current_user
 from services.ai_service import AIService
 
 router = APIRouter()

@@ -11,32 +11,41 @@ A comprehensive platform for HSE (Health, Safety, and Environment) incident inve
 - 👥 **Human Review**: Review and validate AI-generated findings
 - 📑 **PDF Export**: Export reports to professional PDF documents
 
-## Quick Start
+## 🚀 Quick Start (Docker)
 
-### Option 1: Local Self-Hosted (Recommended for Offline Use)
-
-Run everything on your own server with Docker:
+Run the entire application with one command:
 
 ```bash
+# 1. Copy environment file
+cp .env.example .env
+
+# 2. Edit .env and add your OpenAI API key
+# OPENAI_API_KEY=sk-your-key-here
+
+# 3. Start everything
 ./start.sh
 ```
 
-Then follow the setup instructions. See [LOCAL_SETUP.md](LOCAL_SETUP.md) for detailed instructions.
+**Access the app**: http://localhost
 
-**Requirements:**
-- Docker & Docker Compose
-- Python 3.9+
-- Node.js 16+
-- Tesseract OCR
+**Requirements**: Docker, Docker Compose, OpenAI API Key
 
-### Option 2: Cloud Setup with Supabase
+**See**: [QUICK_START.md](QUICK_START.md) for detailed step-by-step guide
 
-See [BACKEND_SETUP.md](BACKEND_SETUP.md) for cloud deployment instructions.
-
-## Default Login (Local Setup)
+## Default Login
 
 - **Email**: `admin@example.com`
 - **Password**: `admin123`
+
+## Alternative Setup Options
+
+### Local Development (Without Docker)
+
+See [LOCAL_SETUP.md](LOCAL_SETUP.md) for manual setup with Python and Node.js.
+
+### Cloud Setup with Supabase
+
+See [BACKEND_SETUP.md](BACKEND_SETUP.md) for cloud deployment instructions.
 
 ## Technology Stack
 
@@ -55,9 +64,11 @@ See [BACKEND_SETUP.md](BACKEND_SETUP.md) for cloud deployment instructions.
 
 ## Documentation
 
-- [Local Setup Guide](LOCAL_SETUP.md) - Self-hosted deployment
+- [Docker Setup Guide](DOCKER_SETUP.md) - Full containerized deployment (recommended)
+- [Local Setup Guide](LOCAL_SETUP.md) - Manual setup without Docker
 - [Backend Setup](BACKEND_SETUP.md) - Cloud deployment with Supabase
 - [Backend Verification](BACKEND_VERIFICATION.md) - Testing guide
+- [Migration Guide](MIGRATION_TO_LOCAL.md) - Understanding the architecture changes
 
 ## Project Structure
 
