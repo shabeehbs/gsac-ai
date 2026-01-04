@@ -7,6 +7,13 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 
 class AIService:
     @staticmethod
+    def _truncate_text(text: str, max_length: int = 1000) -> str:
+        """Truncate text to reduce token usage"""
+        if not text or len(text) <= max_length:
+            return text
+        return text[:max_length] + "... [truncated]"
+
+    @staticmethod
     async def generate_image_description(image_data: bytes, file_type: str) -> str:
         try:
             base64_image = base64.b64encode(image_data).decode('utf-8')
@@ -49,29 +56,29 @@ Provide a factual, professional description suitable for an incident investigati
     @staticmethod
     async def perform_first_pass_analysis(incident_data: Dict[str, Any]) -> Dict[str, Any]:
         try:
-            prompt = f"""Analyze this incident and provide initial findings:
+            description = AIService._truncate_text(str(incident_data.get('description', 'N/A')), 600)
 
-Incident Title: {incident_data.get('title', 'N/A')}
-Description: {incident_data.get('description', 'N/A')}
+            prompt = f"""Analyze incident:
+
+Title: {incident_data.get('title', 'N/A')}
+Description: {description}
 Severity: {incident_data.get('severity', 'N/A')}
 Location: {incident_data.get('location', 'N/A')}
 Date: {incident_data.get('incident_date', 'N/A')}
-
-Witnesses: {len(incident_data.get('witnesses', []))}
-Documents: {len(incident_data.get('documents', []))}
+Witnesses: {len(incident_data.get('witnesses', []))} | Documents: {len(incident_data.get('documents', []))}
 
 Provide:
-1. Immediate causes (what directly led to the incident)
-2. Observable facts and evidence
-3. Key areas requiring deeper investigation
-4. Preliminary risk assessment
+1. Immediate causes
+2. Observable facts
+3. Investigation areas
+4. Risk level
 
 Format as JSON with keys: immediate_causes, observable_facts, investigation_areas, risk_level"""
 
             response = await openai.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=1000
+                max_tokens=800
             )
 
             return {
@@ -89,33 +96,33 @@ Format as JSON with keys: immediate_causes, observable_facts, investigation_area
         human_feedback: str
     ) -> Dict[str, Any]:
         try:
-            prompt = f"""Perform deep root cause analysis:
+            description = AIService._truncate_text(str(incident_data.get('description', 'N/A')), 500)
+            first_analysis = AIService._truncate_text(str(first_pass.get('analysis', 'N/A')), 600)
+            feedback = AIService._truncate_text(str(human_feedback), 400)
 
-INCIDENT DATA:
-Title: {incident_data.get('title', 'N/A')}
-Description: {incident_data.get('description', 'N/A')}
+            prompt = f"""Deep root cause analysis:
+
+Incident: {incident_data.get('title', 'N/A')}
+Description: {description}
 Severity: {incident_data.get('severity', 'N/A')}
 
-FIRST PASS ANALYSIS:
-{first_pass.get('analysis', 'N/A')}
+First Pass: {first_analysis}
+Expert Feedback: {feedback}
 
-HUMAN EXPERT FEEDBACK:
-{human_feedback}
-
-Provide comprehensive root cause analysis including:
-1. Root causes (systemic issues, not just immediate causes)
-2. Contributing factors (organizational, environmental, human factors)
-3. Failure points in existing controls
-4. Detailed corrective actions
+Provide:
+1. Root causes (systemic issues)
+2. Contributing factors
+3. Control failures
+4. Corrective actions
 5. Preventive measures
-6. Timeline for implementation
+6. Implementation timeline
 
 Format as JSON with keys: root_causes, contributing_factors, control_failures, corrective_actions, preventive_measures, implementation_timeline"""
 
             response = await openai.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=2000
+                max_tokens=1500
             )
 
             return {
@@ -133,50 +140,43 @@ Format as JSON with keys: root_causes, contributing_factors, control_failures, c
         review: Dict[str, Any]
     ) -> Dict[str, Any]:
         try:
-            prompt = f"""You are an expert HSE incident investigator performing a refined Root Cause Analysis (RCA).
+            description = AIService._truncate_text(str(incident.get('description', 'N/A')), 500)
+            reviewer_notes = AIService._truncate_text(str(review.get('reviewer_notes', 'None')), 300)
 
-**INCIDENT DETAILS:**
-Type: {incident.get('incident_type', 'N/A')}
-Severity: {incident.get('severity', 'N/A')}
-Date: {incident.get('incident_date', 'N/A')}
-Location: {incident.get('location', 'N/A')}
-Title: {incident.get('title', 'N/A')}
-Description: {incident.get('description', 'N/A')}
+            hazards = first_pass.get('identified_hazards', [])[:5]
+            causes = first_pass.get('potential_causes', [])[:5]
 
-**FIRST PASS AI ANALYSIS:**
-Identified Hazards: {first_pass.get('identified_hazards', [])}
-Potential Causes: {first_pass.get('potential_causes', [])}
-Recommended Actions: {first_pass.get('recommended_actions', [])}
+            prompt = f"""HSE RCA for: {incident.get('title', 'N/A')}
+Severity: {incident.get('severity', 'N/A')} | Date: {incident.get('incident_date', 'N/A')}
+Description: {description}
 
-**HUMAN EXPERT REVIEW:**
-Review Status: {review.get('review_status', 'N/A')}
-Reviewer Notes: {review.get('reviewer_notes', 'None')}
-Approved Hazards: {review.get('approved_hazards', [])}
-Approved Causes: {review.get('approved_causes', [])}
-Additional Actions: {review.get('additional_actions', [])}
+First Pass Hazards: {hazards}
+First Pass Causes: {causes}
 
-Produce a comprehensive RCA following "5 Whys" and "Fishbone" methodologies. Return a JSON object with:
+Expert Review: {reviewer_notes}
 
-1. "refinedAnalysis": Object containing executiveSummary, incidentSequence, evidenceReview
-2. "rootCauseAnalysis": Object with fiveWhysAnalysis (array of 5 why questions/answers), fishboneDiagram (categories: People, Process, Equipment, Environment, Management)
-3. "contributingFactors": Array of 5-10 contributing factors
-4. "immediateCauses": Array of 3-7 immediate causes
-5. "rootCauses": Array of 2-5 underlying root causes
-6. "correctiveActions": Array of objects with action, responsibility, timeline, priority (high/medium/low)
-7. "preventiveActions": Array of 5-10 preventive measures
+Produce RCA with "5 Whys" and "Fishbone" analysis. Return JSON with:
+1. refinedAnalysis: {{executiveSummary, incidentSequence, evidenceReview}}
+2. rootCauseAnalysis: {{fiveWhysAnalysis (5 items), fishboneDiagram (People, Process, Equipment, Environment, Management)}}
+3. contributingFactors: 5-8 factors
+4. immediateCauses: 3-5 causes
+5. rootCauses: 2-4 root causes
+6. correctiveActions: 5-8 actions with action, responsibility, timeline, priority
+7. preventiveActions: 5-8 measures
 
 Return ONLY valid JSON."""
 
             response = await openai.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4o-mini",
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a senior HSE investigator with expertise in Root Cause Analysis and OSHA regulations. Return only valid JSON."
+                        "content": "You are an HSE investigator. Return only valid JSON."
                     },
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.2,
+                max_tokens=2500,
                 response_format={"type": "json_object"}
             )
 
@@ -207,25 +207,23 @@ Return ONLY valid JSON."""
             first_pass = next((a for a in analyses if a['analysis_type'] == 'FIRST_PASS'), None)
             second_pass = next((a for a in analyses if a['analysis_type'] == 'SECOND_PASS'), None)
 
-            prompt = f"""Generate a comprehensive HSE Root Cause Analysis report:
+            description = AIService._truncate_text(str(incident_data.get('description', 'N/A')), 400)
+            first_analysis = AIService._truncate_text(str(first_pass.get('findings', {}).get('analysis', 'N/A') if first_pass else 'N/A'), 500)
+            second_analysis = AIService._truncate_text(str(second_pass.get('findings', {}).get('analysis', 'N/A') if second_pass else 'N/A'), 800)
 
-INCIDENT DETAILS:
-Title: {incident_data.get('title', 'N/A')}
-Date: {incident_data.get('incident_date', 'N/A')}
-Location: {incident_data.get('location', 'N/A')}
+            prompt = f"""Generate HSE RCA report:
+
+Incident: {incident_data.get('title', 'N/A')}
+Date: {incident_data.get('incident_date', 'N/A')} | Location: {incident_data.get('location', 'N/A')}
 Severity: {incident_data.get('severity', 'N/A')}
-Description: {incident_data.get('description', 'N/A')}
+Description: {description}
 
-INITIAL ANALYSIS:
-{first_pass.get('findings', {}).get('analysis', 'N/A') if first_pass else 'N/A'}
+Initial Analysis: {first_analysis}
+Deep Analysis: {second_analysis}
 
-DEEP ANALYSIS:
-{second_pass.get('findings', {}).get('analysis', 'N/A') if second_pass else 'N/A'}
+Witnesses: {len(incident_data.get('witnesses', []))} | Documents: {len(incident_data.get('documents', []))}
 
-WITNESSES: {len(incident_data.get('witnesses', []))}
-DOCUMENTS: {len(incident_data.get('documents', []))}
-
-Generate a professional RCA report in Markdown format with:
+Generate professional Markdown report with sections:
 1. Executive Summary
 2. Incident Overview
 3. Investigation Methodology
@@ -233,18 +231,16 @@ Generate a professional RCA report in Markdown format with:
 5. Root Causes
 6. Contributing Factors
 7. Timeline of Events
-8. Corrective Actions (with priorities and timelines)
+8. Corrective Actions (priorities & timelines)
 9. Preventive Measures
 10. Recommendations
 11. Lessons Learned
-12. Sign-off Section
-
-Use proper markdown formatting with headers, bullet points, and emphasis where appropriate."""
+12. Sign-off Section"""
 
             response = await openai.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=4000
+                max_tokens=3000
             )
 
             return response.choices[0].message.content or "Unable to generate report"
