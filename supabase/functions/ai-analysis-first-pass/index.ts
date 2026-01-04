@@ -20,22 +20,53 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "Missing authorization header" }),
+        {
+          status: 401,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+    }
+
     const supabaseClient = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      {
+        global: {
+          headers: { Authorization: authHeader },
+        },
+      }
+    );
+
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized", details: authError?.message }),
+        {
+          status: 401,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+    }
+
+    const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    const authHeader = req.headers.get("Authorization") || "";
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user } } = await supabaseClient.auth.getUser(token);
-
-    if (!user) {
-      throw new Error("Unauthorized");
-    }
-
     const { incidentId }: FirstPassRequest = await req.json();
 
-    const { data: incident } = await supabaseClient
+    const { data: incident } = await supabaseAdmin
       .from("incidents")
       .select("*")
       .eq("id", incidentId)
@@ -45,12 +76,12 @@ Deno.serve(async (req: Request) => {
       throw new Error("Incident not found");
     }
 
-    const { data: documents } = await supabaseClient
+    const { data: documents } = await supabaseAdmin
       .from("incident_documents")
       .select("*")
       .eq("incident_id", incidentId);
 
-    const { data: existingAnalysis } = await supabaseClient
+    const { data: existingAnalysis } = await supabaseAdmin
       .from("ai_analysis_first_pass")
       .select("*")
       .eq("incident_id", incidentId)
@@ -75,7 +106,7 @@ Deno.serve(async (req: Request) => {
     let analysisId = existingAnalysis?.id;
 
     if (!existingAnalysis) {
-      const { data: newAnalysis } = await supabaseClient
+      const { data: newAnalysis } = await supabaseAdmin
         .from("ai_analysis_first_pass")
         .insert({
           incident_id: incidentId,
@@ -86,7 +117,7 @@ Deno.serve(async (req: Request) => {
         .single();
       analysisId = newAnalysis?.id;
     } else {
-      await supabaseClient
+      await supabaseAdmin
         .from("ai_analysis_first_pass")
         .update({ processing_status: "processing" })
         .eq("id", analysisId);
@@ -97,7 +128,7 @@ Deno.serve(async (req: Request) => {
       documents || []
     );
 
-    await supabaseClient
+    await supabaseAdmin
       .from("ai_analysis_first_pass")
       .update({
         analysis_data: analysisResult.analysisData,
@@ -109,12 +140,12 @@ Deno.serve(async (req: Request) => {
       })
       .eq("id", analysisId);
 
-    await supabaseClient
+    await supabaseAdmin
       .from("incidents")
       .update({ status: "under_investigation" })
       .eq("id", incidentId);
 
-    await supabaseClient.from("audit_logs").insert({
+    await supabaseAdmin.from("audit_logs").insert({
       incident_id: incidentId,
       action_type: "AI_ANALYSIS_FIRST_PASS_COMPLETED",
       action_details: {
